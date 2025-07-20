@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>決算書の見方マスターへの道 - インタラクティブ学習</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutral with Blue Accent -->
+    <!-- Application Structure Plan: A single-page, vertical scrolling application with a fixed navigation header. The structure is thematic rather than linear: 1. Introduction, 2. What is a BS? (with an interactive toggle for accounting standards), 3. Interactive BS Structure (clickable components, 'current/fixed' view toggle, and balance principle explanation), 4. Interactive Safety Analysis (with sliders, a dynamic doughnut chart, and a new 3-step analysis guide), 5. PL Basics (using a visual waterfall layout and expanded profit definitions), 6. Linking BS and PL (explaining the flow of profit), 7. Glossary (searchable list of key terms). This structure encourages exploration and active learning, allowing users to understand relationships between concepts by manipulating them directly and providing comprehensive reference. -->
+    <!-- Visualization & Content Choices: 1. Accounting Standards: HTML/CSS toggle to show the 'before/after' comparison, making the concept's value tangible. 2. BS Structure: HTML/CSS diagram with JS click events to reveal definitions, avoiding information overload. A toggle dynamically refactors the view to show current/fixed assets/liabilities. Added textual explanation for the balance principle. 3. Safety Analysis: A Chart.js doughnut chart dynamically updated by JS-powered sliders for liabilities and equity. A new textual section outlines the 3 steps for BS analysis (grasping totals, visualizing structure, and evaluating with ratios), directly integrating insights from the provided PDF. Visual diagrams using HTML/CSS are added for each step to enhance understanding of the analysis process. Each diagram maintains the overall BS shape and proportion but highlights relevant sections, while fading others. 4. PL Structure: A styled HTML/CSS list that visually represents the waterfall nature of deductions, with expanded definitions for each profit type. 5. Linking BS and PL: HTML/CSS diagram with text to illustrate the flow of profit from PL to BS. 6. Glossary: HTML list with JS search/filter functionality for quick reference. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #F8F7F4;
+            color: #333;
+        }
+        .nav-link {
+            transition: color 0.3s, border-bottom-color 0.3s;
+            border-bottom: 2px solid transparent;
+        }
+        .nav-link:hover, .nav-link.active {
+            color: #1D4ED8;
+            border-bottom-color: #1D4ED8;
+        }
+        .content-card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            transition: all 0.3s ease;
+        }
+        .interactive-box {
+            border: 2px solid #E5E7EB;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        .interactive-box:hover {
+            border-color: #3B82F6;
+            background-color: #EFF6FF;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            height: auto;
+            min-height: 300px;
+            margin: auto;
+        }
+        @media (min-width: 640px) {
+            .chart-container {
+                min-height: 400px;
+            }
+        }
+        .dot {
+            left: 0.25rem;
+        }
+        #view-toggle:checked + .block + .dot {
+            transform: translateX(1.5rem);
+        }
+        .pl-item {
+            position: relative;
+            padding-left: 1.5rem;
+        }
+        .pl-item::before {
+            content: '';
+            position: absolute;
+            left: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: currentColor;
+        }
+        .analysis-step-diagram {
+            background-color: #F0F9FF;
+            border: 1px solid #BFDBFE;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-top: 1rem;
+            margin-bottom: 1rem;
+        }
+        .analysis-item-card {
+            background-color: #E0F2FE;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            text-align: center;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #0B70D7;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .analysis-item-card .icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        /* BS Diagram Styling for Analysis Steps */
+        .bs-diagram-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Left (Assets) and Right (Liabilities + Equity) */
+            height: 200px; /* Fixed height for consistent proportion */
+            border: 2px solid #3B82F6;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            margin: 1rem auto;
+            max-width: 400px; /* Max width for consistency */
+        }
+        .bs-diagram-left {
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #BFDBFE;
+        }
+        .bs-diagram-right {
+            display: flex;
+            flex-direction: column;
+        }
+        .bs-diagram-section {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.875rem;
+            color: #333;
+            border-bottom: 1px solid #BFDBFE;
+            background-color: #E0F2FE; /* Default light blue */
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .bs-diagram-section:last-child {
+            border-bottom: none;
+        }
+        .bs-diagram-section.highlight-asset {
+            background-color: #93C5FD; /* Lighter blue for assets */
+            color: #1E40AF;
+        }
+        .bs-diagram-section.highlight-liability {
+            background-color: #FECACA; /* Lighter red for liabilities */
+            color: #B91C1C;
+        }
+        .bs-diagram-section.highlight-equity {
+            background-color: #BBF7D0; /* Lighter green for equity */
+            color: #166534;
+        }
+        .bs-diagram-section.faded {
+            background-color: #F3F4F6; /* Faded background */
+            color: #9CA3AF;
+        }
+
+        /* PL Diagram Styling for Analysis Steps */
+        .pl-diagram-container {
+            border: 2px solid #3B82F6;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin: 1rem auto;
+            max-width: 400px;
+            background-color: #F0F9FF;
+        }
+        .pl-diagram-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            font-weight: bold;
+            font-size: 0.875rem;
+            color: #333;
+            border-bottom: 1px dashed #BFDBFE;
+        }
+        .pl-diagram-item:last-child {
+            border-bottom: none;
+        }
+        .pl-diagram-item.highlight-revenue {
+            background-color: #D1FAE5; /* Light green */
+            color: #065F46;
+        }
+        .pl-diagram-item.highlight-cost {
+            background-color: #FEE2E2; /* Light red */
+            color: #991B1B;
+        }
+        .pl-diagram-item.highlight-profit {
+            background-color: #DBEAFE; /* Light blue */
+            color: #1E40AF;
+        }
+        .pl-diagram-item .label {
+            flex: 2;
+            text-align: left;
+        }
+        .pl-diagram-item .value {
+            flex: 1;
+            text-align: right;
+        }
+        .pl-diagram-operator {
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #6B7280;
+            margin: 0.25rem 0;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header class="bg-white/80 backdrop-blur-md sticky top-0 z-50 shadow-sm">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <h1 class="text-xl md:text-2xl font-bold text-gray-800">決算書学習アプリ</h1>
+                <div class="hidden sm:flex items-center space-x-4 md:space-x-8">
+                    <a href="#intro" class="nav-link text-gray-600 font-medium pb-1">BSとは？</a>
+                    <a href="#structure" class="nav-link text-gray-600 font-medium pb-1">BSの構造</a>
+                    <a href="#analysis" class="nav-link text-gray-600 font-medium pb-1">安全性分析</a>
+                    <a href="#pl-basics" class="nav-link text-gray-600 font-medium pb-1">PLの基礎</a>
+                    <a href="#pl-analysis" class="nav-link text-gray-600 font-medium pb-1">PLの見方</a>
+                    <a href="#linkage" class="nav-link text-gray-600 font-medium pb-1">BSとPLの連携</a>
+                    <a href="#glossary" class="nav-link text-gray-600 font-medium pb-1">用語集</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+
+        <section id="hero" class="text-center mb-16">
+            <h2 class="text-3xl md:text-5xl font-bold text-blue-800 mb-4">決算書の見方マスターへの道</h2>
+            <p class="text-lg md:text-xl text-gray-700 max-w-3xl mx-auto">会社の健康診断書「貸借対照表(BS)」と成績表「損益計算書(PL)」を、触って、動かして、直感的に理解しましょう。</p>
+        </section>
+
+        <section id="intro" class="mb-16">
+            <div class="content-card">
+                <h3 class="text-2xl font-bold mb-4">ステップ1：BS（貸借対照表）とは？</h3>
+                <p class="text-gray-600 mb-6">貸借対照表（BS）は、会社の「ある一時点」での財政状態を示す書類です。会社がどれくらいの財産（資産）を持ち、どれくらいの借金（負債）を抱え、そして返済不要な自分のお金（純資産）がどれくらいあるのか、一目でわかる「会社の健康診断書」に例えられます。</p>
+                <div class="bg-gray-50 p-6 rounded-lg">
+                    <h4 class="font-bold text-lg mb-4 text-center">なぜ「統一ルール（会計基準）」が必要なの？</h4>
+                    <p class="text-center text-gray-600 mb-6">下のボタンを押して、会計基準がある場合とない場合の違いを体験してみましょう。統一されたルールがあることで、異なる会社の決算書を客観的に比較し、その状況を正しく理解できるようになります。</p>
+                    <div id="rule-comparison" class="grid md:grid-cols-2 gap-6 items-center">
+                        <div id="rule-a" class="p-4 border-2 border-dashed rounded-lg text-center transition-all duration-300">
+                            <h5 class="font-bold text-gray-700">A社</h5>
+                            <div class="text-sm text-gray-500">A社独自のルール</div>
+                            <div class="my-2 p-3 bg-white rounded shadow-sm">決算書</div>
+                        </div>
+                        <div id="rule-b" class="p-4 border-2 border-dashed rounded-lg text-center transition-all duration-300">
+                            <h5 class="font-bold text-gray-700">B社</h5>
+                            <div class="text-sm text-gray-500">B社独自のルール</div>
+                            <div class="my-2 p-3 bg-white rounded shadow-sm">決算書</div>
+                        </div>
+                        <div id="comparison-status" class="md:col-span-2 text-center text-xl font-bold p-3 rounded-lg transition-all duration-300">
+                        </div>
+                    </div>
+                     <div class="text-center mt-6">
+                        <button id="toggle-rule-btn" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-full hover:bg-blue-700 transition-colors">統一ルールを適用する</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="structure" class="mb-16">
+            <div class="content-card">
+                <h3 class="text-2xl font-bold mb-4">ステップ2：BSの構造を分解しよう</h3>
+                <p class="text-gray-600 mb-6">BSは大きく分けて「資産」「負債」「純資産」の3つのブロックで構成されています。下の図の各項目をクリックすると、詳しい説明が表示されます。さらに、スイッチで「流動/固定」の分類に切り替えることもできます。</p>
+                
+                <div class="text-center mb-6">
+                    <label for="view-toggle" class="flex items-center justify-center cursor-pointer">
+                        <span class="mr-3 text-gray-700 font-medium">シンプル表示</span>
+                        <div class="relative">
+                            <input type="checkbox" id="view-toggle" class="sr-only">
+                            <div class="block bg-gray-200 w-14 h-8 rounded-full"></div>
+                            <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition"></div>
+                        </div>
+                        <span class="ml-3 text-gray-700 font-medium">流動/固定で表示</span>
+                    </label>
+                </div>
+
+                <div class="grid grid-cols-5 gap-4 min-h-[400px]">
+                    <div class="col-span-2 flex flex-col gap-4 flex-grow">
+                        <!-- Simple Assets Block -->
+                        <div id="assets-block" data-item="資産" class="interactive-box flex-grow flex items-center justify-center text-xl font-bold bg-blue-50 text-blue-800">資産</div>
+                        
+                        <!-- Detailed Assets Container (hidden by default) -->
+                        <div id="detailed-assets-container" class="flex flex-col gap-4 flex-grow hidden">
+                            <div id="current-assets-block" data-item="流動資産" class="interactive-box flex-grow flex items-center justify-center text-lg font-bold bg-sky-50 text-sky-800">流動資産</div>
+                            <div id="fixed-assets-block" data-item="固定資産" class="interactive-box flex-grow items-center justify-center text-lg font-bold bg-indigo-50 text-indigo-800">固定資産</div>
+                        </div>
+                    </div>
+                    <div class="col-span-3 flex flex-col gap-4 flex-grow">
+                        <!-- シンプル表示用の負債ブロック -->
+                        <div id="liabilities-block" data-item="負債" class="interactive-box flex-grow flex items-center justify-center text-xl font-bold bg-red-50 text-red-800">負債</div>
+                        
+                        <!-- 流動/固定表示用の負債コンテナ -->
+                        <div id="detailed-liabilities-container" class="flex flex-col gap-4 flex-grow hidden">
+                            <div id="current-liabilities-block" data-item="流動負債" class="interactive-box flex-grow flex items-center justify-center text-lg font-bold bg-rose-50 text-rose-800">流動負債</div>
+                            <div id="fixed-liabilities-block" data-item="固定負債" class="interactive-box flex-grow flex items-center justify-center text-lg font-bold bg-amber-50 text-amber-800">固定負債</div>
+                        </div>
+
+                        <!-- 純資産ブロック (常に表示) -->
+                        <div id="equity-block" data-item="純資産" class="interactive-box flex-grow flex items-center justify-center text-xl font-bold bg-green-50 text-green-800">純資産</div>
+                    </div>
+                </div>
+
+                <div id="explanation-box" class="mt-6 p-6 bg-gray-50 rounded-lg min-h-[150px] transition-all duration-300">
+                    <h4 id="explanation-title" class="font-bold text-xl text-gray-800 mb-2">項目を選択してください</h4>
+                    <p id="explanation-text" class="text-gray-600"></p>
+                    <p id="explanation-examples" class="text-sm text-gray-500 mt-2"></p>
+                </div>
+
+                <div class="mt-8 p-6 bg-blue-50 rounded-lg">
+                    <h4 class="font-bold text-xl text-blue-800 mb-3">BSの「バランス」の法則</h4>
+                    <p class="text-gray-700 mb-4">貸借対照表（BS）は、常に「**資産 = 負債 + 純資産**」という等式が成り立ちます。これは、会社が持っているすべての財産（資産）が、どのように調達された資金で賄われているかを示しています。</p>
+                    <ul class="list-disc list-inside text-gray-600">
+                        <li>**左側（資産の部）**：資金の「使い道」や「運用形態」を表します。</li>
+                        <li>**右側（負債の部、純資産の部）**：資金の「調達源泉」を表します。負債は「他人から借りたお金」、純資産は「返済不要な自分のお金」です。</li>
+                    </ul>
+                    <p class="text-gray-700 mt-4">この左右が常に釣り合うため、「バランスシート」と呼ばれます。まるで天秤のように、会社の財政状態がバランスしていることを示しているのです。</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="analysis" class="mb-16">
+             <div class="content-card">
+                <h3 class="text-2xl font-bold mb-4">ステップ3：BSから会社の安全性を分析する</h3>
+                <p class="text-gray-600 mb-6">会社の安全性を見る重要な指標が「自己資本比率」です。これは総資産に占める純資産の割合で、高いほど借金が少なく安全な会社と言えます。下のスライダーを動かして、負債と純資産のバランスが変化すると、自己資本比率と会社の安全性がどう変わるか見てみましょう。</p>
+                
+                <div class="grid md:grid-cols-2 gap-8 items-center">
+                    <div class="chart-container">
+                        <canvas id="safety-chart"></canvas>
+                    </div>
+                    <div class="space-y-6">
+                        <div>
+                            <label for="liabilities-slider" class="font-medium">負債の割合</label>
+                            <input id="liabilities-slider" type="range" min="0" max="100" value="60" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                        <div>
+                            <label for="equity-slider" class="font-medium">純資産の割合</label>
+                            <input id="equity-slider" type="range" min="0" max="100" value="40" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                        <div class="p-6 bg-blue-50 rounded-lg text-center">
+                            <h4 class="text-lg font-bold text-blue-800">自己資本比率</h4>
+                            <p id="capital-ratio" class="text-5xl font-bold text-blue-800 my-2">40%</p>
+                            <p id="safety-status" class="font-medium text-lg text-blue-700">標準的</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-8 p-6 bg-gray-50 rounded-lg">
+                    <h4 class="font-bold text-xl text-gray-800 mb-3">自己資本比率の目安</h4>
+                    <ul class="list-disc list-inside text-gray-600">
+                        <li>**50%以上**：非常に安全な企業。外部からの借金に頼らず、自己資金で安定経営。</li>
+                        <li>**30%〜50%**：比較的安全。健全な財務基盤を持つ企業が多い。</li>
+                        <li>**10%〜30%**：注意が必要。業種によっては問題ない場合もあるが、財務状況の悪化に注意。</li>
+                        <li>**10%未満**：危険水域。借金が多く、経営が不安定な可能性が高い。マイナスは「債務超過」で非常に危険。</li>
+                    </ul>
+                    <p class="text-gray-700 mt-4">ただし、業種によって適正な自己資本比率は異なります。例えば、設備投資が多い製造業では低め、サービス業では高めの傾向があります。</p>
+                </div>
+
+                <div class="mt-8 p-6 bg-yellow-50 rounded-lg">
+                    <h4 class="font-bold text-xl text-yellow-800 mb-3">BS詳細分析の3ステップ</h4>
+                    <p class="text-gray-700 mb-4">貸借対照表（BS）から会社の財政状態をより深く読み解くための、具体的な3つのステップをご紹介します。それぞれのステップで、BSのどこに注目し、何がわかるのかを見ていきましょう。</p>
+                    <div class="space-y-8">
+                        <div>
+                            <h5 class="font-bold text-lg text-yellow-800 mb-2">ステップ1：全体像と自己資本比率で安全性を評価する</h5>
+                            <p class="text-gray-700 mb-2">まず、貸借対照表の「資産合計」「負債合計」「純資産合計」の3つの金額を把握し、会社全体の規模と、その資金源が自己資金（純資産）と他人資金（負債）のどちらに多く依存しているかを見ます。</p>
+                            <div class="bs-diagram-container">
+                                <div class="bs-diagram-left">
+                                    <div class="bs-diagram-section highlight-asset flex-grow">資産合計</div>
+                                </div>
+                                <div class="bs-diagram-right">
+                                    <div class="bs-diagram-section highlight-liability h-1/2">負債合計</div>
+                                    <div class="bs-diagram-section highlight-equity h-1/2">純資産合計</div>
+                                </div>
+                            </div>
+                            <p class="text-gray-700 mt-2">特に「**自己資本比率（純資産 ÷ 資産 × 100）**」は、会社の財務的な安全性を測る最も重要な指標です。この比率が高いほど、返済義務のない自己資金で経営されている安全な会社であると判断できます。</p>
+                            <div class="analysis-step-diagram flex items-center justify-center p-2">
+                                <div class="w-1/2 bg-green-200 h-8 rounded-l-md flex items-center justify-center text-green-800 font-bold">純資産</div>
+                                <div class="w-1/2 bg-gray-200 h-8 rounded-r-md flex items-center justify-center text-gray-700 font-bold">負債</div>
+                                <div class="absolute text-sm font-bold text-blue-800">自己資本比率 = 純資産 ÷ 資産 × 100</div>
+                            </div>
+                            <p class="text-gray-700 mt-2">**このステップでわかること：** 会社の長期的な安定性、倒産しにくさ、借金への依存度。</p>
+                        </div>
+                        
+                        <div>
+                            <h5 class="font-bold text-lg text-yellow-800 mb-2">ステップ2：流動性分析と流動比率で短期的な支払い能力を評価する</h5>
+                            <p class="text-gray-700 mb-2">次に、資産と負債をそれぞれ「流動（1年以内）」と「固定（1年超）」に細分化して見ます。これにより、会社の資産がどれだけ早く現金になるか、負債の返済期限がいつ来るかを把握します。</p>
+                            <div class="bs-diagram-container">
+                                <div class="bs-diagram-left">
+                                    <div class="bs-diagram-section highlight-asset h-1/2">流動資産</div>
+                                    <div class="bs-diagram-section faded h-1/2">固定資産</div>
+                                </div>
+                                <div class="bs-diagram-right">
+                                    <div class="bs-diagram-section highlight-liability h-1/4">流動負債</div>
+                                    <div class="bs-diagram-section faded h-1/4">固定負債</div>
+                                    <div class="bs-diagram-section faded h-1/2">純資産</div>
+                                </div>
+                            </div>
+                            <p class="text-gray-700 mt-2">ここで重要なのが「**流動比率（流動資産 ÷ 流動負債 × 100）**」です。これは、1年以内に返済が必要な負債に対して、どれだけすぐに使える資産があるかを示す指標で、会社の短期的な支払い能力を表します。一般的に150%〜200%以上が健全とされます。</p>
+                            <div class="analysis-step-diagram flex items-center justify-center p-2">
+                                <div class="w-1/2 bg-sky-200 h-8 rounded-l-md flex items-center justify-center text-sky-800 font-bold">流動資産</div>
+                                <div class="w-1/2 bg-rose-200 h-8 rounded-r-md flex items-center justify-center text-rose-800 font-bold">流動負債</div>
+                                <div class="absolute text-sm font-bold text-blue-800">流動比率 = 流動資産 ÷ 流動負債 × 100</div>
+                            </div>
+                            <p class="text-gray-700 mt-2">**このステップでわかること：** 会社の資金繰りの安定性、緊急時の支払い能力、短期的な財務健全性。</p>
+                        </div>
+                        
+                        <div>
+                            <h5 class="font-bold text-lg text-yellow-800 mb-2">ステップ3：各項目の詳細な内訳からリスクと強みを特定する</h5>
+                            <p class="text-gray-700 mb-2">最後に、各項目をさらに細かく見て、会社の具体的なリスクや強みを発見します。このステップでは、それぞれの項目が持つ意味合いを深く理解することが重要です。</p>
+                            
+                            <h6 class="font-bold text-base text-gray-800 mb-2 mt-4">流動資産の内訳とわかること</h6>
+                            <div class="bs-diagram-container">
+                                <div class="bs-diagram-left">
+                                    <div class="bs-diagram-section highlight-asset h-[calc(100%/6)]">💰 現預金等</div>
+                                    <div class="bs-diagram-section highlight-asset h-[calc(100%/6)]">🧾 売掛金</div>
+                                    <div class="bs-diagram-section highlight-asset h-[calc(100%/6)]">📦 棚卸資産</div>
+                                    <div class="bs-diagram-section faded h-1/2">固定資産</div>
+                                </div>
+                                <div class="bs-diagram-right">
+                                    <div class="bs-diagram-section faded h-1/2">負債</div>
+                                    <div class="bs-diagram-section faded h-1/2">純資産</div>
+                                </div>
+                            </div>
+                            <ul class="list-disc list-inside text-gray-600 ml-4 space-y-1">
+                                <li>**現預金等**：手元にどれだけの資金があるか。多すぎると資金効率が悪いことも。</li>
+                                <li>**売掛金**：顧客からの未回収代金。多すぎると回収リスクや不良債権化のリスク。</li>
+                                <li>**棚卸資産（在庫）**：販売前の商品。多すぎると売れ残りリスクや陳腐化リスク。</li>
+                            </ul>
+                            <p class="text-gray-700 mt-2">**このステップでわかること：** 資金の流動性、売上債権の回収状況、在庫管理の効率性。</p>
+
+                            <h6 class="font-bold text-base text-gray-800 mb-2 mt-6">流動負債の内訳とわかること</h6>
+                            <div class="bs-diagram-container">
+                                <div class="bs-diagram-left">
+                                    <div class="bs-diagram-section faded flex-grow">資産</div>
+                                </div>
+                                <div class="bs-diagram-right">
+                                    <div class="bs-diagram-section highlight-liability h-[calc(100%/6)]">📝 買掛金</div>
+                                    <div class="bs-diagram-section highlight-liability h-[calc(100%/6)]">🏦 短期借入金</div>
+                                    <div class="bs-diagram-section highlight-liability h-[calc(100%/6)]">🎁 前受金</div>
+                                    <div class="bs-diagram-section faded h-1/2">固定負債</div>
+                                    <div class="bs-diagram-section faded h-1/2">純資産</div>
+                                </div>
+                            </div>
+                            <ul class="list-disc list-inside text-gray-600 ml-4 space-y-1">
+                                <li>**買掛金**：仕入先への未払い代金。通常の営業活動で発生する債務。</li>
+                                <li>**短期借入金**：銀行などからの短期的な借金。</li>
+                                <li>**前受金**：顧客から先に受け取った代金（まだサービス提供していない分）。将来の売上。</li>
+                            </ul>
+                            <p class="text-gray-700 mt-2">**このステップでわかること：** 短期的な資金繰りの状況、仕入債務の管理、将来の収益見込み。</p>
+
+                            <h6 class="font-bold text-base text-gray-800 mb-2 mt-6">純資産の内訳とわかること</h6>
+                            <div class="bs-diagram-container">
+                                <div class="bs-diagram-left">
+                                    <div class="bs-diagram-section faded flex-grow">資産</div>
+                                </div>
+                                <div class="bs-diagram-right">
+                                    <div class="bs-diagram-section faded h-1/2">負債</div>
+                                    <div class="bs-diagram-section highlight-equity h-1/4">💼 資本金・資本剰余金</div>
+                                    <div class="bs-diagram-section highlight-equity h-1/4">📈 利益剰余金</div>
+                                </div>
+                            </div>
+                            <ul class="list-disc list-inside text-gray-600 ml-4 space-y-1">
+                                <li>**資本金・資本剰余金**：株主から出資された元手。</li>
+                                <li>**利益剰余金**：過去の企業活動で稼ぎ、蓄積された利益。これが大きいほど、内部留保が厚い健全な会社。</li>
+                            </ul>
+                            <p class="text-gray-700 mt-2">**このステップでわかること：** 会社の安定性、成長性、株主への還元余力、内部留保の厚さ。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="pl-basics" class="mb-16">
+            <div class="content-card">
+                <h3 class="text-2xl font-bold mb-4">ステップ4：PL（損益計算書）の基礎知識</h3>
+                <p class="text-gray-600 mb-6">PLは、一定期間の会社の経営成績を示す「成績表」です。売上から様々な費用を引いて、最終的にどれくらいの利益が残ったかを表します。下の図は利益が計算される流れを示しています。</p>
+                <div class="space-y-2 max-w-2xl mx-auto">
+                    <div class="p-4 bg-green-100 rounded-lg text-center">
+                        <p class="font-bold text-xl text-green-800">売上高</p>
+                        <p class="text-sm text-green-700">商品やサービスを売って得たお金</p>
+                    </div>
+                    <div class="text-center font-bold text-2xl text-red-500">-</div>
+                    <div class="p-3 bg-red-100 rounded-lg text-center ml-4">
+                        <p class="font-bold text-lg text-red-800">売上原価</p>
+                         <p class="text-sm text-red-700">売れた商品の仕入れや製造にかかった費用</p>
+                    </div>
+                    <div class="text-center font-bold text-2xl text-gray-500">=</div>
+                    <div class="p-4 bg-emerald-100 rounded-lg text-center font-bold text-xl text-emerald-800">売上総利益（粗利益）</div>
+                    <p class="text-center text-sm text-gray-500 mt-1">（本業の売上から直接かかる費用を引いた利益。商品の魅力や販売力を見る指標。）</p>
+                    <div class="text-center font-bold text-2xl text-red-500">-</div>
+                    <div class="p-3 bg-red-100 rounded-lg text-center ml-4">
+                        <p class="font-bold text-lg text-red-800">販売費及び一般管理費</p>
+                         <p class="text-sm text-red-700">人件費や広告費など、営業にかかる費用</p>
+                    </div>
+                    <div class="text-center font-bold text-2xl text-gray-500">=</div>
+                    <div class="p-4 bg-teal-100 rounded-lg text-center font-bold text-xl text-teal-800">営業利益</div>
+                    <p class="text-center text-sm text-gray-500 mt-1">（本業での儲け。会社の営業力を見る指標。）</p>
+                    <div class="text-center font-bold text-xl text-gray-500">+ / -</div>
+                    <div class="p-3 bg-gray-100 rounded-lg text-center ml-4">
+                        <p class="font-bold text-lg text-gray-800">営業外損益</p>
+                         <p class="text-sm text-gray-700">利息の受取・支払など、本業以外での損益</p>
+                    </div>
+                    <div class="text-center font-bold text-2xl text-gray-500">=</div>
+                    <div class="p-4 bg-cyan-100 rounded-lg text-center font-bold text-xl text-cyan-800">経常利益</div>
+                    <p class="text-center text-sm text-gray-500 mt-1">（会社全体の通常の活動で得た利益。会社の総合的な収益力を見る指標。）</p>
+                    <div class="text-center font-bold text-xl text-gray-500">+ / -</div>
+                     <div class="p-3 bg-gray-100 rounded-lg text-center ml-4">
+                        <p class="font-bold text-lg text-gray-800">特別損益</p>
+                         <p class="text-sm text-gray-700">固定資産の売却損益など、臨時的に発生した損益</p>
+                    </div>
+                    <div class="text-center font-bold text-2xl text-gray-500">=</div>
+                     <div class="p-4 bg-sky-100 rounded-lg text-center font-bold text-xl text-sky-800">税引前当期純利益</div>
+                    <div class="text-center font-bold text-2xl text-red-500">-</div>
+                    <div class="p-3 bg-red-100 rounded-lg text-center ml-4">
+                        <p class="font-bold text-lg text-red-800">法人税等</p>
+                    </div>
+                    <div class="text-center font-bold text-2xl text-gray-500">=</div>
+                    <div class="p-4 bg-blue-100 rounded-lg text-center">
+                        <p class="font-bold text-2xl text-blue-800">当期純利益</p>
+                        <p class="text-sm text-blue-700">最終的に会社に残った利益</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="pl-analysis" class="mb-16">
+            <div class="content-card">
+                <h3 class="text-2xl font-bold mb-4">ステップ5：PLの見方と利益率分析</h3>
+                <p class="text-gray-600 mb-6">損益計算書（PL）は、会社の「成績表」であり、売上から様々な費用を差し引いて、最終的にどれくらいの利益が残ったかを示します。ここでは、PLを分解して理解し、各利益が何を示しているのか、そしてそれぞれの利益率から何がわかるのかを詳しく見ていきましょう。</p>
+
+                <div class="space-y-8">
+                    <div>
+                        <h5 class="font-bold text-lg text-blue-800 mb-2">ステップ5-1：PLを「売上・費用・当期純利益」で分解して理解する</h5>
+                        <p class="text-gray-700 mb-2">まず、PLの全体像をシンプルに「売上（稼ぎ）」「費用（使ったお金）」「当期純利益（最終的な儲け）」の3つに分けて捉えます。これにより、会社がどれだけ稼ぎ、どれだけ費用を使い、最終的にどれだけ手元に残ったのかの基本構造を理解できます。</p>
+                        <div class="pl-diagram-container">
+                            <div class="pl-diagram-item highlight-revenue">
+                                <span class="label">売上高</span>
+                                <span class="value">100%</span>
+                            </div>
+                            <div class="pl-diagram-operator">-</div>
+                            <div class="pl-diagram-item highlight-cost">
+                                <span class="label">すべての費用</span>
+                                <span class="value">XX%</span>
+                            </div>
+                            <div class="pl-diagram-operator">=</div>
+                            <div class="pl-diagram-item highlight-profit">
+                                <span class="label">当期純利益</span>
+                                <span class="value">YY%</span>
+                            </div>
+                        </div>
+                        <p class="text-gray-700 mt-2">**このステップでわかること：** 会社が最終的にどれだけの利益を生み出したかという、最も基本的な収益力。</p>
+                    </div>
+
+                    <div>
+                        <h5 class="font-bold text-lg text-blue-800 mb-2">ステップ5-2：費用を深掘りし、各利益と利益率を理解する</h5>
+                        <p class="text-gray-700 mb-2">次に、費用を段階的に差し引いていくことで、会社の様々な側面での「儲け」が見えてきます。それぞれの利益が何を示し、対応する利益率が何を評価するのかを学びましょう。</p>
+
+                        <!-- 売上総利益 -->
+                        <h6 class="font-bold text-base text-gray-800 mb-2 mt-4">売上総利益（粗利益）と売上総利益率</h6>
+                        <div class="pl-diagram-container">
+                            <div class="pl-diagram-item highlight-revenue">
+                                <span class="label">売上高</span>
+                                <span class="value">100%</span>
+                            </div>
+                            <div class="pl-diagram-operator">-</div>
+                            <div class="pl-diagram-item highlight-cost">
+                                <span class="label">売上原価</span>
+                                <span class="value">（商品・製造費用）</span>
+                            </div>
+                            <div class="pl-diagram-operator">=</div>
+                            <div class="pl-diagram-item highlight-profit">
+                                <span class="label">売上総利益</span>
+                                <span class="value"></span>
+                            </div>
+                        </div>
+                        <p class="text-gray-700 mt-2">**売上総利益：** 本業の売上から、その商品を仕入れるか製造するのに直接かかった費用（売上原価）を引いた利益です。商品そのものの競争力や、仕入れ・製造の効率性を示します。</p>
+                        <p class="text-gray-700 mt-1">**売上総利益率 = (売上総利益 ÷ 売上高) × 100%**</p>
+                        <p class="text-gray-700 mt-1">**この利益率でわかること：** 会社の主力商品やサービスの儲けの大きさ。高ければ、商品の魅力や価格設定が適切であると言えます。</p>
+
+                        <!-- 営業利益 -->
+                        <h6 class="font-bold text-base text-gray-800 mb-2 mt-6">営業利益と営業利益率</h6>
+                        <div class="pl-diagram-container">
+                            <div class="pl-diagram-item highlight-profit">
+                                <span class="label">売上総利益</span>
+                                <span class="value"></span>
+                            </div>
+                            <div class="pl-diagram-operator">-</div>
+                            <div class="pl-diagram-item highlight-cost">
+                                <span class="label">販売費及び一般管理費</span>
+                                <span class="value">（人件費、広告費など）</span>
+                            </div>
+                            <div class="pl-diagram-operator">=</div>
+                            <div class="pl-diagram-item highlight-profit">
+                                <span class="label">営業利益</span>
+                                <span class="value"></span>
+                            </div>
+                        </div>
+                        <p class="text-gray-700 mt-2">**営業利益：** 売上総利益から、商品を販売したり会社を運営したりするためにかかった費用（販売費及び一般管理費）を引いた利益です。会社の本業での「稼ぐ力」を最も純粋に表します。</p>
+                        <p class="text-gray-700 mt-1">**営業利益率 = (営業利益 ÷ 売上高) × 100%**</p>
+                        <p class="text-gray-700 mt-1">**この利益率でわかること：** 会社の営業活動そのものの効率性。高ければ、本業でしっかり儲けを出せていると言えます。</p>
+
+                        <!-- 経常利益 -->
+                        <h6 class="font-bold text-base text-gray-800 mb-2 mt-6">経常利益と経常利益率</h6>
+                        <div class="pl-diagram-container">
+                            <div class="pl-diagram-item highlight-profit">
+                                <span class="label">営業利益</span>
+                                <span class="value"></span>
+                            </div>
+                            <div class="pl-diagram-operator">+ / -</div>
+                            <div class="pl-diagram-item highlight-cost">
+                                <span class="label">営業外損益</span>
+                                <span class="value">（受取利息、支払利息など）</span>
+                            </div>
+                            <div class="pl-diagram-operator">=</div>
+                            <div class="pl-diagram-item highlight-profit">
+                                <span class="label">経常利益</span>
+                                <span class="value"></span>
+                            </div>
+                        </div>
+                        <p class="text-gray-700 mt-2">**経常利益：** 営業利益に、本業以外の活動で発生した収益や費用（営業外損益）を加減した利益です。会社全体の通常の活動でどれだけ儲けを出しているかを示し、企業の総合的な収益力を表します。</p>
+                        <p class="text-gray-700 mt-1">**経常利益率 = (経常利益 ÷ 売上高) × 100%**</p>
+                        <p class="text-gray-700 mt-1">**この利益率でわかること：** 会社全体の基本的な稼ぐ力。本業だけでなく、資金運用なども含めた総合的な収益力を評価できます。</p>
+
+                        <!-- 税引前当期純利益 -->
+                        <h6 class="font-bold text-base text-gray-800 mb-2 mt-6">税引前当期純利益</h6>
+                        <div class="pl-diagram-container">
+                            <div class="pl-diagram-item highlight-profit">
+                                <span class="label">経常利益</span>
+                                <span class="value"></span>
+                            </div>
+                            <div class="pl-diagram-operator">+ / -</div>
+                            <div class="pl-diagram-item highlight-cost">
+                                <span class="label">特別損益</span>
+                                <span class="value">（固定資産売却損益など）</span>
+                            </div>
+                            <div class="pl-diagram-operator">=</div>
+                            <div class="pl-diagram-item highlight-profit">
+                                <span class="label">税引前当期純利益</span>
+                                <span class="value"></span>
+                            </div>
+                        </div>
+                        <p class="text-gray-700 mt-2">**税引前当期純利益：** 経常利益に、臨時的に発生した特別な損益（特別損益）を加減した利益です。法人税などを支払う前の、最終的な利益の段階です。</p>
+
+                        <!-- 当期純利益 -->
+                        <h6 class="font-bold text-base text-gray-800 mb-2 mt-6">当期純利益と当期純利益率</h6>
+                        <div class="pl-diagram-container">
+                            <div class="pl-diagram-item highlight-profit">
+                                <span class="label">税引前当期純利益</span>
+                                <span class="value"></span>
+                            </div>
+                            <div class="pl-diagram-operator">-</div>
+                            <div class="pl-diagram-item highlight-cost">
+                                <span class="label">法人税等</span>
+                                <span class="value"></span>
+                            </div>
+                            <div class="pl-diagram-operator">=</div>
+                            <div class="pl-diagram-item highlight-profit">
+                                <span class="label">当期純利益</span>
+                                <span class="value"></span>
+                            </div>
+                        </div>
+                        <p class="text-gray-700 mt-2">**当期純利益：** すべての収益からすべての費用と税金を差し引いた、最終的に会社に残る利益です。株主にとって最も重要な利益であり、この利益がBSの純資産に蓄積されます。</p>
+                        <p class="text-gray-700 mt-1">**当期純利益率 = (当期純利益 ÷ 売上高) × 100%**</p>
+                        <p class="text-gray-700 mt-1">**この利益率でわかること：** 会社が最終的にどれだけの効率で利益を上げているか。企業の総合的な収益力を評価する指標です。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="linkage" class="mb-16">
+            <div class="content-card">
+                <h3 class="text-2xl font-bold mb-4">ステップ6：BSとPLの連携を理解する</h3>
+                <p class="text-gray-600 mb-6">BSとPLは独立した書類ではなく、密接に連携しています。特に、PLで計算された「当期純利益」は、BSの「純資産」に大きな影響を与えます。会社の儲けが、どのように会社の財産に蓄積されていくのかを見てみましょう。</p>
+                <div class="max-w-xl mx-auto p-6 bg-blue-50 rounded-lg shadow-md">
+                    <div class="text-center text-xl font-bold text-blue-800 mb-4">PLからBSへの利益の流れ</div>
+                    <div class="flex flex-col items-center">
+                        <div class="p-4 bg-green-200 rounded-lg text-center w-full">
+                            <p class="font-bold text-green-800">損益計算書 (PL)</p>
+                            <p class="text-sm text-green-700">一定期間の経営成績</p>
+                            <p class="mt-2 text-lg font-bold text-green-900">当期純利益</p>
+                        </div>
+                        <div class="my-4 text-4xl text-gray-600">↓</div>
+                        <div class="p-4 bg-blue-200 rounded-lg text-center w-full">
+                            <p class="font-bold text-blue-800">貸借対照表 (BS)</p>
+                            <p class="text-sm text-blue-700">ある一時点の財政状態</p>
+                            <p class="mt-2 text-lg font-bold text-blue-900">純資産の部</p>
+                            <p class="text-sm text-blue-700">（利益剰余金として蓄積）</p>
+                        </div>
+                    </div>
+                    <p class="text-gray-700 mt-6 text-center">PLで得られた当期純利益は、BSの純資産の部にある「利益剰余金」として蓄積されます。これにより、会社の自己資本が増強され、財務基盤が強化されるのです。</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="glossary" class="mb-16">
+            <div class="content-card">
+                <h3 class="text-2xl font-bold mb-4">用語集</h3>
+                <p class="text-gray-600 mb-6">決算書を理解するための主要な用語をまとめました。検索ボックスで用語を絞り込むことができます。</p>
+                <div class="mb-4">
+                    <input type="text" id="glossary-search" placeholder="用語を検索..." class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div id="glossary-list" class="space-y-4">
+                    <!-- Glossary items will be populated by JavaScript -->
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-gray-800 text-white text-center p-4">
+        <p>&copy; 2025 決算書インタラクティブ学習. All Rights Reserved.</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- Navigation ---
+            const navLinks = document.querySelectorAll('.nav-link');
+            const sections = document.querySelectorAll('main section');
+
+            const activateNavLink = (link) => {
+                navLinks.forEach(l => l.classList.remove('active'));
+                link.classList.add('active');
+            };
+
+            navLinks.forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const targetId = link.getAttribute('href');
+                    document.querySelector(targetId).scrollIntoView({ behavior: 'smooth' });
+                    activateNavLink(link);
+                });
+            });
+
+            window.addEventListener('scroll', () => {
+                let current = '';
+                sections.forEach(section => {
+                    const sectionTop = section.offsetTop;
+                    if (pageYOffset >= sectionTop - 80) {
+                        current = '#' + section.id;
+                    }
+                });
+                const activeLink = document.querySelector(`.nav-link[href="${current}"]`);
+                if (activeLink) {
+                    activateNavLink(activeLink);
+                }
+            });
+            
+            // --- Intro: Rule Comparison ---
+            const toggleRuleBtn = document.getElementById('toggle-rule-btn');
+            const comparisonStatus = document.getElementById('comparison-status');
+            const ruleA = document.getElementById('rule-a');
+            const ruleB = document.getElementById('rule-b');
+            let rulesUnified = false;
+
+            const updateRuleView = () => {
+                if(rulesUnified) {
+                    toggleRuleBtn.textContent = '独自のルールに戻す';
+                    comparisonStatus.textContent = '比較可能';
+                    comparisonStatus.classList.remove('bg-red-200', 'text-red-800');
+                    comparisonStatus.classList.add('bg-green-200', 'text-green-800');
+                    ruleA.querySelector('div').textContent = '統一のルール';
+                    ruleB.querySelector('div').textContent = '統一のルール';
+                } else {
+                    toggleRuleBtn.textContent = '統一ルールを適用する';
+                    comparisonStatus.textContent = '比較できない';
+                    comparisonStatus.classList.remove('bg-green-200', 'text-green-800');
+                    comparisonStatus.classList.add('bg-red-200', 'text-red-800');
+                    ruleA.querySelector('div').textContent = 'A社独自のルール';
+                    ruleB.querySelector('div').textContent = 'B社独自のルール';
+                }
+            };
+            toggleRuleBtn.addEventListener('click', () => {
+                rulesUnified = !rulesUnified;
+                updateRuleView();
+            });
+            updateRuleView();
+
+            // --- Structure: BS decomposition ---
+            const bsItems = document.querySelectorAll('.interactive-box');
+            const expTitle = document.getElementById('explanation-title');
+            const expText = document.getElementById('explanation-text');
+            const expExamples = document.getElementById('explanation-examples');
+            const viewToggle = document.getElementById('view-toggle');
+
+            const explanations = {
+                '資産': { text: '会社が保有する財産や権利。現金、建物、将来お金を受け取る権利など、プラスの財産全般を指します。', examples: '例：現金、預金、商品、土地、建物、売掛金' },
+                '負債': { text: '将来支払わなければならない義務。銀行からの借入金や、商品の仕入代金の未払い分など、マイナスの財産を指します。', examples: '例：買掛金、借入金、社債' },
+                '純資産': { text: '資産総額から負債総額を差し引いた、返済不要の自己資本。株主からの出資金や、これまでの利益の蓄積からなります。', examples: '例：資本金、利益剰余金' },
+                '流動資産': { text: '1年以内に現金化される予定の資産。日々の事業活動ですぐに動かせる資産が中心です。', examples: '例：現金、預金、売掛金、棚卸資産' },
+                '固定資産': { text: '1年を超えて長期的に保有・使用する資産。会社の基盤となる資産です。', examples: '例：建物、土地、機械装置、車両運搬具' },
+                '流動負債': { text: '1年以内に支払期限が来る負債。短期的な支払義務です。', examples: '例：買掛金、短期借入金' },
+                '固定負債': { text: '支払期限が1年を超える負債。長期的な借金などです。', examples: '例：長期借入金、社債' }
+            };
+
+            bsItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    const itemName = item.dataset.item;
+                    const data = explanations[itemName];
+                    if(data) {
+                        expTitle.textContent = itemName;
+                        expText.textContent = data.text;
+                        expExamples.textContent = data.examples;
+                    }
+                });
+            });
+
+            const liabilitiesBlock = document.getElementById('liabilities-block');
+            const detailedLiabilitiesContainer = document.getElementById('detailed-liabilities-container');
+            const assetsBlock = document.getElementById('assets-block');
+            const detailedAssetsContainer = document.getElementById('detailed-assets-container');
+
+            viewToggle.addEventListener('change', () => {
+                if (viewToggle.checked) { // 詳細表示
+                    liabilitiesBlock.classList.add('hidden');
+                    detailedLiabilitiesContainer.classList.remove('hidden');
+                    detailedLiabilitiesContainer.classList.add('flex');
+
+                    assetsBlock.classList.add('hidden'); // Hide simple assets block
+                    detailedAssetsContainer.classList.remove('hidden'); // Show detailed assets container
+                    detailedAssetsContainer.classList.add('flex');
+
+                } else { // シンプル表示
+                    liabilitiesBlock.classList.remove('hidden');
+                    detailedLiabilitiesContainer.classList.add('hidden');
+                    detailedLiabilitiesContainer.classList.remove('flex');
+
+                    assetsBlock.classList.remove('hidden'); // Show simple assets block
+                    detailedAssetsContainer.classList.add('hidden'); // Hide detailed assets container
+                    detailedAssetsContainer.classList.remove('flex');
+                }
+            });
+
+            // --- Analysis: Safety Chart ---
+            const ctx = document.getElementById('safety-chart').getContext('2d');
+            const liabilitiesSlider = document.getElementById('liabilities-slider');
+            const equitySlider = document.getElementById('equity-slider');
+            const capitalRatioText = document.getElementById('capital-ratio');
+            const safetyStatusText = document.getElementById('safety-status');
+
+            const safetyChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['負債', '純資産'],
+                    datasets: [{
+                        data: [60, 40],
+                        backgroundColor: ['#FCA5A5', '#86EFAC'],
+                        borderColor: ['#F87171', '#4ADE80'],
+                        borderWidth: 2,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '60%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.label + ': ' + context.raw + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            function updateChart() {
+                let liabilities = parseInt(liabilitiesSlider.value);
+                let equity = parseInt(equitySlider.value);
+                let total = liabilities + equity;
+                if (total === 0) total = 1;
+
+                const liabPercent = Math.round((liabilities / total) * 100);
+                const eqPercent = 100 - liabPercent;
+
+                safetyChart.data.datasets[0].data[0] = liabPercent;
+                safetyChart.data.datasets[0].data[1] = eqPercent;
+                safetyChart.update();
+
+                capitalRatioText.textContent = eqPercent + '%';
+
+                if (eqPercent >= 50) {
+                    safetyStatusText.textContent = '非常に安全';
+                    safetyStatusText.className = "font-medium text-lg text-green-700";
+                } else if (eqPercent >= 30) {
+                    safetyStatusText.textContent = '安全';
+                    safetyStatusText.className = "font-medium text-lg text-emerald-700";
+                } else if (eqPercent >= 10) {
+                    safetyStatusText.textContent = '注意が必要';
+                     safetyStatusText.className = "font-medium text-lg text-amber-700";
+                } else {
+                    safetyStatusText.textContent = '危険水域';
+                    safetyStatusText.className = "font-medium text-lg text-red-700";
+                }
+            }
+
+            liabilitiesSlider.addEventListener('input', updateChart);
+            equitySlider.addEventListener('input', updateChart);
+            updateChart();
+
+            // --- Glossary ---
+            const glossaryItems = [
+                { term: '貸借対照表 (BS)', definition: 'ある一時点での会社の財政状態を示す書類。資産、負債、純資産で構成されます。' },
+                { term: '損益計算書 (PL)', definition: '一定期間の会社の経営成績を示す書類。売上から費用を差し引いて利益を計算します。' },
+                { term: '資産', definition: '会社が保有する財産や権利。現金、建物、売掛金など。' },
+                { term: '負債', definition: '将来支払わなければならない義務。銀行からの借入金や、商品の仕入代金の未払い分など、マイナスの財産を指します。', examples: '例：買掛金、借入金、社債' },
+                { term: '純資産', definition: '資産から負債を差し引いた、返済不要な自己資本。株主からの出資金や利益の蓄積。' },
+                { term: '流動資産', definition: '1年以内に現金化される予定の資産。' },
+                { term: '固定資産', definition: '1年を超えて長期的に保有・使用する資産。' },
+                { term: '流動負債', definition: '1年以内に支払期限が来る負債。' },
+                { term: '固定負債', definition: '支払期限が1年を超える負債。' },
+                { term: '自己資本比率', definition: '総資産に占める純資産の割合。会社の安全性を測る指標。' },
+                { term: '流動比率', definition: '流動資産を流動負債で割った比率。会社の短期的な支払い能力を示す指標。' },
+                { term: '売上高', definition: '商品やサービスを売って得たお金の合計。' },
+                { term: '売上原価', definition: '売れた商品を作るのにかかった費用。' },
+                { term: '売上総利益（粗利益）', definition: '売上高から売上原価を差し引いた利益。' },
+                { term: '売上総利益率', definition: '売上高に対する売上総利益の割合。商品の収益性を示す。' },
+                { term: '販売費及び一般管理費', definition: '人件費や広告費など、営業活動や会社の運営にかかる費用。' },
+                { term: '営業利益', definition: '本業での儲け。売上総利益から販売費及び一般管理費を差し引いたもの。' },
+                { term: '営業利益率', definition: '売上高に対する営業利益の割合。本業の収益性を示す。' },
+                { term: '営業外損益', definition: '本業以外で発生した損益（受取利息、支払利息など）。' },
+                { term: '経常利益', definition: '会社全体の通常の活動で得た利益。営業利益に営業外損益を加減したもの。' },
+                { term: '経常利益率', definition: '売上高に対する経常利益の割合。会社全体の総合的な収益性を示す。' },
+                { term: '特別損益', definition: '臨時的に発生した損益（固定資産売却損益など）。' },
+                { term: '税引前当期純利益', definition: '法人税などを差し引く前の最終利益。' },
+                { term: '当期純利益', definition: '最終的に会社に残った利益。' },
+                { term: '当期純利益率', definition: '売上高に対する当期純利益の割合。最終的な収益性を示す。' }
+            ];
+
+            const glossaryList = document.getElementById('glossary-list');
+            const glossarySearch = document.getElementById('glossary-search');
+
+            const renderGlossary = (filterText = '') => {
+                glossaryList.innerHTML = '';
+                const filteredItems = glossaryItems.filter(item => 
+                    item.term.toLowerCase().includes(filterText.toLowerCase()) || 
+                    item.definition.toLowerCase().includes(filterText.toLowerCase())
+                );
+
+                filteredItems.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'p-4 bg-gray-100 rounded-lg';
+                    div.innerHTML = `
+                        <h4 class="font-bold text-lg text-gray-800">${item.term}</h4>
+                        <p class="text-gray-600 text-sm">${item.definition}</p>
+                    `;
+                    glossaryList.appendChild(div);
+                });
+
+                if (filteredItems.length === 0) {
+                    glossaryList.innerHTML = '<p class="text-center text-gray-500">該当する用語は見つかりませんでした。</p>';
+                }
+            };
+
+            glossarySearch.addEventListener('input', (e) => {
+                renderGlossary(e.target.value);
+            });
+
+            renderGlossary(); // Initial render
+        });
+    </script>
+</body>
+</html>
